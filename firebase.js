@@ -1,4 +1,4 @@
-// firebase.js - FINAL - MATTARA FOOD PRODUCT
+// firebase.js - FINAL FIXED - Backup ALL Data
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -20,34 +20,42 @@ try {
   console.error("Firebase Error:", e);
 }
 
-// Backup: type backupToFirebase() in console
 window.backupToFirebase = async () => {
   if (!db) return alert("Firebase not ready");
-  const data = localStorage.getItem('mattaraDB');
-  if (!data) return alert("No local data found to backup!");
   try {
-    await setDoc(doc(db, "mattara", "backup"), { 
-      data: data, 
+    // Backup ENTIRE localStorage - all keys
+    const allData = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      allData[key] = localStorage.getItem(key);
+    }
+    if (Object.keys(allData).length === 0) return alert("No data in this browser to backup!");
+
+    await setDoc(doc(db, "mattara", "backup"), {
+      allData: JSON.stringify(allData),
       time: new Date().toISOString(),
-      device: navigator.userAgent
+      keys: Object.keys(allData)
     });
-    alert("✅ Backup saved to Firebase Cloud!");
-  } catch(err){ alert("Backup failed: " + err.message); }
+    alert("✅ SUCCESS! Backup saved!\nKeys backed up: " + Object.keys(allData).join(", "));
+  } catch(err){ alert("Backup failed: " + err.message); console.error(err); }
 };
 
-// Restore: type restoreFromFirebase() in console
 window.restoreFromFirebase = async () => {
   if (!db) return alert("Firebase not ready");
   try {
     const snap = await getDoc(doc(db, "mattara", "backup"));
     if (snap.exists()) {
-      if (confirm("Restore from Cloud? Last backup: " + snap.data().time + "\nThis will replace local data. Continue?")) {
-        localStorage.setItem('mattaraDB', snap.data().data);
+      const backup = snap.data();
+      if (confirm("Restore from Cloud?\nBackup time: " + backup.time + "\nKeys: " + backup.keys + "\n\nContinue?")) {
+        const allData = JSON.parse(backup.allData);
+        for (const key in allData) {
+          localStorage.setItem(key, allData[key]);
+        }
         alert("✅ Restored! Page will reload.");
         location.reload();
       }
     } else {
-      alert("No backup found in cloud. Do backupToFirebase() first.");
+      alert("No backup found in cloud. Do backup first.");
     }
   } catch(err){ alert("Restore failed: " + err.message); }
 };
