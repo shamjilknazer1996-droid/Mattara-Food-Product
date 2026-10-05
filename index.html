@@ -621,40 +621,20 @@ if(!Array.isArray(db.wholesalePayments)) db.wholesalePayments=[];
 if(!Array.isArray(db.sales)) db.sales=[];
 if(!Array.isArray(db.purchases)) db.purchases=[];
 if(!Array.isArray(db.returns)) db.returns=[];
-async function loadFromFirebase(){
-  try{
-    console.log("Loading from Firebase...");
-    const snapshot = await window.fsGetDocs(window.fsCollection(window.db, "products"));
-    if(snapshot.empty){
-      console.log("No cloud data yet");
-      return;
-    }
-    snapshot.forEach(docSnap => {
-      const cloudProduct = docSnap.data();
-      const id = docSnap.id;
-      // Find product by id or index
-      let index = db.products.findIndex(p => String(p.id) === String(id));
-      if(index === -1){
-        // Try by index if id is number like "0", "1"
-        const numId = Number(id);
-        if(!isNaN(numId) && db.products[numId]){
-          index = numId;
-        }
-      }
-      if(index!== -1){
-        // Update existing product with cloud data
-        db.products[index] = {...db.products[index],...cloudProduct};
-      }
-    });
-    console.log("Loaded from Firebase:", snapshot.size, "products");
-    // Save to local and refresh screen
-    persist();
-    fillSelects();
-    renderStock();
-    renderProducts();
-  } catch(e){
-    console.error("Load from Firebase failed:", e);
-  }
+function persist(){localStorage.setItem('mattarasDB',JSON.stringify(db));}
+function money(n){return Number(n||0).toFixed(2)}
+function iso(d=new Date()){return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+document.getElementById('today').textContent=new Date().toLocaleString();
+document.getElementById('companyInfo').textContent=db.settings.company;
+function _originalShowPageAccessControl(id){
+ document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+ document.getElementById(id).classList.add('active');
+ document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===id));
+ document.getElementById('pageTitle').textContent=document.querySelector('nav button[data-page="'+id+'"]').innerText.trim();
+ if(id==='dashboard') renderDashboard(); if(id==='stock') renderStock();
+renderUsers(); if(id==='products') renderProducts(); if(id==='wholesaleCustomers'){renderWholesaleCustomers();renderWholesaleLedger();}
+ if(id==='sales') renderSales(); if(id==='purchase') renderPurchases(); if(id==='returns') renderReturns(); if(id==='wholesalePurchases') renderWholesalePurchases();
 }
 
 function showPage(id){
@@ -1065,41 +1045,26 @@ function editStockProduct(i){
 function closeStockEdit(){
  document.getElementById('stockEditModal').style.display='none';
 }
-
-async function saveStockEdit(){
-  const i=document.getElementById('stockEditIndex').value, p=db.products[i];
-  if(!p)return;
-  const wholesale=Number(document.getElementById('editWholesale').value);
-  const retail=Number(document.getElementById('editRetail').value);
-  const mrp=Number(document.getElementById('editMRP').value);
-  const stock=Number(document.getElementById('editStock').value);
-  if(!Number.isFinite(wholesale)||wholesale<0||!Number.isFinite(retail)||retail<0||!Number.isFinite(mrp)||mrp<0||!Number.isFinite(stock)||stock<0){
-    return alert('Please enter valid rates and stock.');
-  }
-  p.wholesaleRate=wholesale;
-  p.retailRate=retail;
-  p.mrpRate=mrp;
-  p.price=retail;
-  p.stock=stock;
-
-  // Save locally also
-  persist();
-
-  // SAVE TO FIREBASE
-  try{
-    const productId = p.id? String(p.id) : String(i);
-    await window.fsSetDoc(window.fsDoc(window.db, "products", productId), p);
-    console.log("Saved to Firebase:", productId);
-  } catch(e){
-    console.error("Firebase save error:", e);
-    alert("Saved locally but Firebase error: " + e.message);
-  }
-
-  fillSelects();
-  renderStock();
-  renderProducts();
-  closeStockEdit();
-  alert('Product rates and stock updated successfully - saved to Cloud!');
+function saveStockEdit(){
+ const i=+document.getElementById('stockEditIndex').value, p=db.products[i];
+ if(!p)return;
+ const wholesale=Number(document.getElementById('editWholesale').value);
+ const retail=Number(document.getElementById('editRetail').value);
+ const mrp=Number(document.getElementById('editMRP').value);
+ const stock=Number(document.getElementById('editStock').value);
+ if(!Number.isFinite(wholesale)||wholesale<0||!Number.isFinite(retail)||retail<0||!Number.isFinite(mrp)||mrp<0||!Number.isFinite(stock)||stock<0)
+   return alert('Please enter valid rates and stock.');
+ p.wholesaleRate=wholesale;
+ p.retailRate=retail;
+ p.mrpRate=mrp;
+ p.price=retail;
+ p.stock=stock;
+ persist();
+ fillSelects();
+ renderStock();
+ renderProducts();
+ closeStockEdit();
+ alert('Product rates and stock updated successfully.');
 }
 function renderStock(){
  stockTable.innerHTML=`<table><thead><tr><th>No.</th><th>Product Code</th><th>Product</th><th>Wholesale Rate</th><th>Retail Rate</th><th>MRP Rate</th><th>Balance Stock</th><th>Status</th><th>Edit</th></tr></thead><tbody>${db.products.map((p,i)=>`<tr><td>${i+1}</td><td>${esc(p.code||'')}</td><td>${esc(p.name)}</td><td>${money(p.wholesaleRate??p.price??0)}</td><td>${money(p.retailRate??p.price??0)}</td><td>${money(p.mrpRate??p.price??0)}</td><td class="stock-balance">${p.stock||0}</td><td>${(p.stock||0)>0?'<span class="pill ok">Available</span>':'<span class="pill danger">Out of Stock</span>'}</td><td><button class="btn" onclick="editStockProduct(${i})">Edit</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">No products</td></tr>'}</tbody></table>`
@@ -1216,7 +1181,6 @@ function init(){
  document.getElementById('dashboardDate').value=dr.max; document.getElementById('purchaseFrom').value=''; document.getElementById('purchaseTo').value=''; renderDashboard();renderProducts();renderStock();renderSales();renderPurchases();renderReturns();renderReport();renderWholesaleCustomers();renderWholesaleLedger();renderWholesalePaymentHistory();
 }
 init();
-loadFromFirebase();
 </script>
 
 <div id="stockEditModal" class="stock-edit-modal">
@@ -1236,30 +1200,5 @@ loadFromFirebase();
     </div>
   </div>
 </div>
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyCiSDU3L1b9LfRpA09Hhg5IBZLrOEbcMY",
-    authDomain: "mattara-food-product.firebaseapp.com",
-    projectId: "mattara-food-product",
-    storageBucket: "mattara-food-product.firebasestorage.app",
-    messagingSenderId: "182858019306",
-    appId: "1:182858019306:web:738ddb06940af2f8998293"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-
-  // Make Firestore available to your whole app
-  window.db = db;
-  window.fsCollection = collection;
-  window.fsDoc = doc;
-  window.fsSetDoc = setDoc;
-  window.fsGetDocs = getDocs;
-  window.fsDeleteDoc = deleteDoc;
-
-  console.log("Firebase connected to mattara-food-product!");
-</script>
 </body></html>
