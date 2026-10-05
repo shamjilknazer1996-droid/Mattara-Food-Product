@@ -669,7 +669,7 @@ function newBill(){
  document.getElementById('wholesaleCustomerId').value=''; document.getElementById('wholesaleCustomerName').value='';
  document.getElementById('discount').value=0; document.getElementById('payment').value='Cash';
  document.getElementById('wholesalePaymentType').value='Spot Pay'; document.getElementById('wholesalePaymentMethod').value='Cash';
- document.getElementById('billBody').innerHTML=''; setBillingRateType(); addBillRow(); updateWholesalePaymentUI();
+ document.getElementById('billBody').innerHTML=''; setBillingRateType(); updateWholesalePaymentUI();
 }
 function getWholesaleCustomerById(id){
  const key=String(id||'').trim().toLowerCase();
@@ -794,20 +794,22 @@ function setBillingRateType(){
 }
 function addBillRow(){
  let tr=document.createElement('tr');
- tr.innerHTML=`<td><input class="bc" placeholder="Enter / scan code" autocomplete="off"></td><td><select class="bi">${productOptions()}</select></td><td class="bs">0</td><td><input class="bq" type="number" min="1" value="1"></td><td><input class="br" type="number" min="0" value="0"></td><td class="bt">0.00</td><td><button class="btn danger" onclick="this.closest('tr').remove();calcBill()">×</button></td>`;
+ tr.innerHTML=`<td><input class="bc" placeholder="Enter / scan code" autocomplete="off"></td><td><select class="bi"><option value="">-- Select Product --</option>${productOptions()}</select></td><td class="bs">0</td><td><input class="bq" type="number" min="1" value="1"></td><td><input class="br" type="number" min="0" value="0"></td><td class="bt">0.00</td><td><button class="btn danger" onclick="this.closest('tr').remove();calcBill()">×</button></td>`;
  document.getElementById('billBody').appendChild(tr);
  let code=tr.querySelector('.bc'), sel=tr.querySelector('.bi'), rate=tr.querySelector('.br'), bal=tr.querySelector('.bs'), qty=tr.querySelector('.bq');
  function loadProduct(i){
-   if(i<0 || !db.products[i]){bal.textContent='Not found';return false}
-   sel.value=i; rate.value=getBillingRate(db.products[i]); bal.textContent=db.products[i].stock||0; calcBill(); return true;
+   if(i<0 || !db.products[i]){bal.textContent='0';rate.value='0';return false}
+   sel.value=i; rate.value=getBillingRate(db.products[i]); bal.textContent=db.products[i].stock||0; calcBill(); return true
  }
  code.oninput=()=>{let i=findProductByCode(code.value);if(i>=0)loadProduct(i)};
  code.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();let i=findProductByCode(code.value);if(i<0)alert('Product code not found');else {loadProduct(i);qty.focus();}}};
  code.onchange=()=>{let i=findProductByCode(code.value);if(i>=0)loadProduct(i)};
- sel.onchange=()=>{let i=+sel.value;code.value=db.products[i]?.code||'';loadProduct(i)};
- qty.oninput=()=>{if(+qty.value>(db.products[+sel.value]?.stock||0))qty.setCustomValidity('Quantity exceeds balance stock');else qty.setCustomValidity('');calcBill()};
+ sel.onchange=()=>{
+   if(sel.value===''){code.value='';bal.textContent='0';rate.value='0';calcBill();return;}
+   let i=+sel.value;code.value=db.products[i]?.code||'';loadProduct(i);
+ };
+ qty.oninput=()=>{if(sel.value!=='' && +qty.value>(db.products[+sel.value]?.stock||0))qty.setCustomValidity('Quantity exceeds balance stock');else qty.setCustomValidity('');calcBill()};
  rate.oninput=calcBill;
- let i=+sel.value;code.value=db.products[i]?.code||'';loadProduct(i);
  code.focus();
 }
 function billItems(){
