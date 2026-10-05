@@ -621,20 +621,40 @@ if(!Array.isArray(db.wholesalePayments)) db.wholesalePayments=[];
 if(!Array.isArray(db.sales)) db.sales=[];
 if(!Array.isArray(db.purchases)) db.purchases=[];
 if(!Array.isArray(db.returns)) db.returns=[];
-function persist(){localStorage.setItem('mattarasDB',JSON.stringify(db));}
-function money(n){return Number(n||0).toFixed(2)}
-function iso(d=new Date()){return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)}
-function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
-document.getElementById('today').textContent=new Date().toLocaleString();
-document.getElementById('companyInfo').textContent=db.settings.company;
-function _originalShowPageAccessControl(id){
- document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
- document.getElementById(id).classList.add('active');
- document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===id));
- document.getElementById('pageTitle').textContent=document.querySelector('nav button[data-page="'+id+'"]').innerText.trim();
- if(id==='dashboard') renderDashboard(); if(id==='stock') renderStock();
-renderUsers(); if(id==='products') renderProducts(); if(id==='wholesaleCustomers'){renderWholesaleCustomers();renderWholesaleLedger();}
- if(id==='sales') renderSales(); if(id==='purchase') renderPurchases(); if(id==='returns') renderReturns(); if(id==='wholesalePurchases') renderWholesalePurchases();
+async function loadFromFirebase(){
+  try{
+    console.log("Loading from Firebase...");
+    const snapshot = await window.fsGetDocs(window.fsCollection(window.db, "products"));
+    if(snapshot.empty){
+      console.log("No cloud data yet");
+      return;
+    }
+    snapshot.forEach(docSnap => {
+      const cloudProduct = docSnap.data();
+      const id = docSnap.id;
+      // Find product by id or index
+      let index = db.products.findIndex(p => String(p.id) === String(id));
+      if(index === -1){
+        // Try by index if id is number like "0", "1"
+        const numId = Number(id);
+        if(!isNaN(numId) && db.products[numId]){
+          index = numId;
+        }
+      }
+      if(index!== -1){
+        // Update existing product with cloud data
+        db.products[index] = {...db.products[index],...cloudProduct};
+      }
+    });
+    console.log("Loaded from Firebase:", snapshot.size, "products");
+    // Save to local and refresh screen
+    persist();
+    fillSelects();
+    renderStock();
+    renderProducts();
+  } catch(e){
+    console.error("Load from Firebase failed:", e);
+  }
 }
 
 function showPage(id){
@@ -1196,6 +1216,7 @@ function init(){
  document.getElementById('dashboardDate').value=dr.max; document.getElementById('purchaseFrom').value=''; document.getElementById('purchaseTo').value=''; renderDashboard();renderProducts();renderStock();renderSales();renderPurchases();renderReturns();renderReport();renderWholesaleCustomers();renderWholesaleLedger();renderWholesalePaymentHistory();
 }
 init();
+loadFromFirebase();
 </script>
 
 <div id="stockEditModal" class="stock-edit-modal">
