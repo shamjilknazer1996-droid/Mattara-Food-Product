@@ -1296,13 +1296,11 @@ function mattaraCurrentLocalUsers(){
 
 async function mattaraWriteUsers(){
   if(!mattaraFirebaseReady || !mattaraFirebaseDb) return;
-  
-  // 1. Save users WITHOUT password to Firestore (for permissions)
-  const safeUsers=mattaraFirebaseUsers.map(u=>{const x={...u}; delete x.password; return x;});
   await mattaraFirebaseDb.collection('app').doc('users').set({
-    users:safeUsers,
-    updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    users: mattaraFirebaseUsers,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   },{merge:true});
+}
 
   // 2. ALSO create them in Firebase Authentication
   for(const u of mattaraFirebaseUsers){
@@ -1421,73 +1419,63 @@ async function mattaraHandleLogin(e){
   const id=document.getElementById('loginId').value.trim();
   const pw=document.getElementById('loginPassword').value;
   const err=document.getElementById('loginError');
+  
   if(!mattaraFirebaseReady){
-    if(typeof handleLoginLocalBackup==='function') return handleLoginLocalBackup(e);
-    if(err) err.style.display='block';
+    if(err){ err.textContent="Firebase not ready"; err.style.display='block'; }
     return false;
   }
- try{
-    // 1. Get users from Firestore app/users (NOT from Firebase Auth)
-    const usersDocRef = doc(mattaraDb, "app", "users");
-    const usersSnap = await getDoc(usersDocRef);
 
-    if(!usersSnap.exists()){
-      throw new Error("Firestore app/users document not found");
+  try{
+    // 1. Get users from Firestore app/users
+    const docRef = mattaraFirebaseDb.collection('app').doc('users');
+    const snap = await docRef.get();
+    
+    if(!snap.exists){
+      throw new Error("Firestore app/users not found");
     }
+    
+    const allUsers = snap.data().users || [];
+    console.log("Users in Firestore:", allUsers.map(u=>u.loginId));
 
-    const usersData = usersSnap.data();
-    const allUsers = usersData.users || []; // your array
-
-    // 2. Find user by loginId + password (case-insensitive for loginId)
-    const pw = document.getElementById("password")?.value || arguments[1] || ""; // adjust to your var name
-    const id = document.getElementById("loginId")?.value || arguments[0] || "";
-
-    let user = allUsers.find(u =>
-      String(u.loginId).toLowerCase() === String(id).toLowerCase() &&
-      String(u.password) === String(pw) &&
-      u.active!== false
+    // 2. Find by loginId + password
+    const user = allUsers.find(u => 
+      String(u.loginId).toLowerCase() === String(id).toLowerCase() && 
+      String(u.password) === String(pw)
     );
 
     if(!user){
-      // Also try without password check for old data where password might be hashed
-      const userById = allUsers.find(u => String(u.loginId).toLowerCase() === String(id).toLowerCase());
-      if(userById){
-        console.log("User found by ID but password mismatch. Available:", userById);
-        throw new Error("Invalid password for " + id);
+      const exists = allUsers.find(u=> String(u.loginId).toLowerCase()===String(id).toLowerCase());
+      if(exists){
+        throw new Error("Invalid password for " + id + ". Stored: " + exists.password);
+      } else {
+        throw new Error("User " + id + " not found. Available: " + allUsers.map(u=>u.loginId).join(", "));
       }
-      throw new Error("User " + id + " not found in Firestore app/users. Available: " + allUsers.map(u=>u.loginId).join(", "));
     }
 
-    // 3. Success - user is from Firestore, no need for Firebase Auth credential
-    // Keep synthetic email for compatibility if needed, but DON'T call signIn
-    const email = mattaraSyntheticEmail? mattaraSyntheticEmail(user.loginId) : user.email;
-    user.email = email;
-
-    // Save current user locally
-    localStorage.setItem("mattara_current_user", JSON.stringify(user));
-    localStorage.setItem("mattara_loginId", user.loginId);
-
-    // Continue your existing success code below...
-    // e.g. show dashboard, etc.
-    }
     if(user.active===false){
-      await mattaraFirebaseAuth.signOut();
-      throw new Error('This user is inactive. Contact Administrator.');
+      throw new Error("User " + id + " is disabled (active=false)");
     }
-    user.uid=user.uid||cred.user.uid; user.email=user.email||email;
-    mattaraSetLocalUsers(mattaraFirebaseUsers);
+
+    // 3. Success
+    mattaraSetLocalUsers(allUsers);
+    localStorage.setItem("mattara_current_user", JSON.stringify(user));
     sessionStorage.setItem('mattarasLoggedIn','1');
-    sessionStorage.setItem('mattarasCurrentUser',JSON.stringify({name:user.name,loginId:user.loginId,role:user.role,position:user.position||user.role,uid:user.uid}));
+    sessionStorage.setItem('mattarasCurrentUser', JSON.stringify(user));
+    
     if(err) err.style.display='none';
-    hideLogin(); updateTopLoggedUser(); renderUsers();
+    hideLogin(); 
+    updateTopLoggedUser(); 
+    renderUsers();
+    return false;
+
   }catch(ex){
     console.error(ex);
-    if(err){err.textContent=ex.message||'Login failed';err.style.display='block';}
+    if(err){ err.textContent=ex.message; err.style.display='block'; }
     document.getElementById('loginPassword').value='';
-    document.getElementById('loginPassword').focus();
+    return false;
   }
-  return false;
 }
+window.handleLogin=mattaraHandleLogin;
 
 async function mattaraCreateUser(){
   const name=document.getElementById('userName').value.trim();
