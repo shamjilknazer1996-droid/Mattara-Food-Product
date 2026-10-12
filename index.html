@@ -1294,7 +1294,15 @@ function mattaraCurrentLocalUsers(){
   return mattaraFirebaseUsers.length ? mattaraFirebaseUsers : (typeof getUsers==='function' ? getUsers() : []);
 }
 
+async function mattaraWriteUsers(){
+  if(!mattaraFirebaseReady || !mattaraFirebaseDb) return;
+  await mattaraFirebaseDb.collection('app').doc('users').set({
+    users: mattaraFirebaseUsers,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  },{merge:true});
+}
 
+async function mattaraMigrateExistingUsers(){
   const local = (()=>{try{return JSON.parse(localStorage.getItem('mattarasUsers')||'null')}catch(e){return null}})();
   if(!Array.isArray(local)||!local.length) return;
   if(!mattaraFirebaseReady) return;
