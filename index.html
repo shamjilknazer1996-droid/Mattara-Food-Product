@@ -1294,31 +1294,7 @@ function mattaraCurrentLocalUsers(){
   return mattaraFirebaseUsers.length ? mattaraFirebaseUsers : (typeof getUsers==='function' ? getUsers() : []);
 }
 
-async function mattaraWriteUsers(){
-  if(!mattaraFirebaseReady || !mattaraFirebaseDb) return;
-  await mattaraFirebaseDb.collection('app').doc('users').set({
-    users: mattaraFirebaseUsers,
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  },{merge:true});
-}
 
-  // 2. ALSO create them in Firebase Authentication
-  for(const u of mattaraFirebaseUsers){
-    if(!u.password) continue;
-    const email = mattaraSyntheticEmail(u.loginId);
-    try{
-      await mattaraFirebaseAuth.createUserWithEmailAndPassword(email, u.password);
-      console.log("Created Auth user for", u.loginId);
-    }catch(e){
-      if(e.code === 'auth/email-already-in-use'){
-        console.log("Auth user already exists for", u.loginId);
-      } else {
-        console.error("Failed to create Auth for", u.loginId, e.message);
-      }
-    }
-  }
-}
-async function mattaraMigrateExistingUsers(){
   const local = (()=>{try{return JSON.parse(localStorage.getItem('mattarasUsers')||'null')}catch(e){return null}})();
   if(!Array.isArray(local)||!local.length) return;
   if(!mattaraFirebaseReady) return;
