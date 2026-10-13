@@ -1116,13 +1116,13 @@ function downloadPeriodReport(){
  const returnRows=returns.map(x=>({Date:x.date,ProductCode:db.products[x.product]?.code||'',Product:db.products[x.product]?.name||'Deleted',Qty:Number(x.qty||0),Amount:Number(x.amount||0),Reason:x.reason||'',CustomerID:x.customerId||'',Customer:x.customerName||''}));
  const paymentRows=payments.map(x=>({Date:x.date,Reference:x.reference||'',CustomerID:x.customerId||'',Customer:x.customerName||'',Amount:Number(x.amount||0),Method:x.method||'',SourceMethod:x.sourceMethod||''}));
  const cash=sales.filter(x=>String(x.payment||'').toUpperCase()==='CASH' && x.wholesalePaymentType!=='Credit').reduce((a,x)=>a+Number(x.total||0),0),upi=sales.filter(x=>String(x.payment||'').toUpperCase()==='UPI' && x.wholesalePaymentType!=='Credit').reduce((a,x)=>a+Number(x.total||0),0),credit=sales.filter(x=>x.wholesalePaymentType==='Credit').reduce((a,x)=>a+Number(x.total||0),0),sv=sales.reduce((a,x)=>a+Number(x.total||0),0),pv=purchases.reduce((a,x)=>a+Number(x.total||0),0),rv=returns.reduce((a,x)=>a+Number(x.amount||0),0);
- const summary=[{FromDate:f,ToDate:t,TotalSales:sv,TotalPurchase:pv,TotalReturns:rv,ReceivedCash:cash,ReceivedUPI:upi,CreditDue:credit,NetSales:sv-rv,InvoiceCount:sales.length}];
- const add=(name,rows)=>{const ws=XLSX.utils.json_to_sheet(rows.length?rows:[{}]);ws['!cols']=Object.keys(rows[0]||{}).map(()=>({wch:18}));XLSX.utils.book_append_sheet(wb,ws,name)};
- add('Summary',summary);add('Sales Details',salesRows);add('Purchase Details',purchaseRows);add('Return Details',returnRows);
- add('Amount Closing / Received',paymentRows);
- add('Wholesale Customers',db.wholesaleCustomers.map(c=>({CustomerID:c.id,CustomerName:c.name,Phone:c.phone||''}))); 
- const productMap={};sales.forEach(s=>s.items.forEach(it=>{const key=it.i;if(!productMap[key])productMap[key]={Qty:0,Amount:0};productMap[key].Qty+=Number(it.q||0);productMap[key].Amount+=Number(it.total||0)}));add('Product Summary',Object.entries(productMap).map(([i,v])=>({ProductCode:db.products[i]?.code||'',Product:db.products[i]?.name||'Deleted',QtySold:v.Qty,SalesAmount:v.Amount})));
- XLSX.writeFile(wb,'Mattaras_Period_Report_'+f+'_to_'+t+'.xlsx');
+    const summary=[{FromDate:f,ToDate:t,TotalSales:sv,TotalPurchase:pv,TotalReturns:rv,ReceivedCash:cash,ReceivedUPI:upi,CreditDue:credit,NetSales:ss-rv,InvoiceCount:sales.length}];
+    const add=(name,rows)=>{ const ws=XLSX.utils.json_to_sheet(rows.length?rows:[{}]); ws['!cols']=Object.keys(rows[0]||{}).map(()=>({wch:18})); XLSX.utils.book_append_sheet(wb, ws, name.replace(/[:\\\/\?\*\[\]]/g, "-").substring(0,31)); };
+    add('Summary',summary);add('Sales Details',salesRows);add('Purchase Details',purchaseRows);add('Return Details',returnRows);
+    add('Amount Closing - Received',paymentRows);
+    add('Wholesale Customers',db.wholesaleCustomers.map(c=>({CustomerID:c.id,CustomerName:c.name,Phone:c.phone||''})));
+    const productMap={};sales.forEach(s=>s.items.forEach(it=>{const key=it.id;if(!productMap[key])productMap[key]={Qty:0,Amount:0};productMap[key].Qty+=Number(it.q||0);productMap[key].Amount+=Number(it.total||0);}));add('Product Wise',Object.values(productMap));
+    XLSX.writeFile(wb,'Mattaras_Period_Report_'+f+'_to_'+t+'.xlsx');
 }
 function saveSettings(){db.settings={company:sCompany.value||"MATTARA'S FOOD PRODUCT",upi:sUpi.value.trim(),phone:sPhone.value,address:sAddress.value};persist();companyInfo.textContent=db.settings.company;if(typeof updateBillingUpiQr==='function')updateBillingUpiQr();alert('Settings saved')}
 
